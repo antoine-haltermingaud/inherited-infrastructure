@@ -275,3 +275,30 @@ three.
 data (deploy frequency, task role usage, actual traffic curves), price the Multi-AZ and
 TLS decisions concretely, and pair with the team on the deploy-pipeline rework rather
 than prescribing it.
+
+## Optional kicker — ECS and Kubernetes: consolidate?
+
+Consolidate — running two orchestrators is the most expensive redundancy a team of this
+size can carry: two deploy pipelines, two patching and security models, two observability
+setups, and two sets of production failure modes, each needing on-call coverage that
+understands it, all paid out of the feature time of a handful of engineers with no ops
+team — and pricefeed itself is a case study of what happens to platform surface nobody
+owns. My default target is ECS on Fargate, for the same reason it is in the "reasonable"
+list above: it is the closest thing AWS offers to a no-ops platform — no control-plane
+upgrades, no node patching, no ingress/CNI/cert-manager add-on matrix, no quarterly
+Kubernetes version treadmill — and everything documented in this review is configuration
+debt on a *simple* platform; the same year of neglect on Kubernetes would have compounded
+much faster. But that default is provisional until four things about your environment are
+known. First, what actually runs on Kubernetes and why: service count, statefulness, and
+above all whether anything depends on Helm charts or operators with no ECS equivalent —
+third-party software that only ships as a chart is a hard blocker for ECS-only. Second,
+whether the cluster is EKS or self-managed: an unowned self-managed cluster is itself a
+top-priority finding and strengthens the case for leaving Kubernetes, while a healthy EKS
+weakens it. Third, real team fluency: if your engineers live in kubectl daily and the
+Kubernetes estate is the larger, healthier one, consolidating onto EKS beats dragging
+everything to the platform nobody uses — migration cost means you consolidate toward
+where the workloads and knowledge already are. Fourth, portability commitments: a genuine
+contractual or regulatory requirement to run outside AWS forces Kubernetes and reverses
+the default. Either endpoint — everything on Fargate, or everything on a well-run EKS —
+beats paying for both indefinitely; whichever direction wins, migrate gradually, service
+by service as systems get touched, never as a big-bang cutover of a production stack.
