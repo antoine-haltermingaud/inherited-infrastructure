@@ -279,7 +279,7 @@ than prescribing it.
 ## Errata — from post-commit self-review
 
 An adversarial review of the fix commit (resource-by-resource diff of the synthesized
-templates on both sides of `6f1771d`; full verdicts in
+templates on both sides of `655147d`; full verdicts in
 `PARA/Tasks/05-FixCommitAdversarialReview/01-adversarial-review.md`) produced two
 corrections after the commit was pushed:
 
@@ -287,7 +287,7 @@ corrections after the commit was pushed:
    `circuitBreaker` makes the CDK emit an explicit deployment controller, which
    CloudFormation treats as ECS service *replacement* — the exact outage finding 2 exists
    to prevent, invisible in the CDK source and visible only in the template diff. Fixed in
-   `5fe0eea`.
+   `2af650b`.
 2. **The commit message overstates its own rollout safety.** Applied as one deploy, the
    commit rotates the DB password and rewires the secret injection simultaneously — the
    sequence the Tuesday plan forbids. The end-state configuration is right; applying it to

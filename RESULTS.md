@@ -7,13 +7,13 @@ One page on where everything is. Total time: within the 4-hour box.
 | Part | Where | One-liner |
 |---|---|---|
 | 1 — Review | [`REVIEW.md`](REVIEW.md) | Findings ranked for *this* context (3 tiers), a "looks odd but is fine" list, and a Monday–Friday plan. Optional ECS-vs-K8s kicker is the last section. |
-| 2 — Fixes | commits `6f1771d` + `5fe0eea` | Top 3 findings only: deploy-outage settings, credentials/DB exposure, data survivability. ~20-line diff to `lib/`; message covers scope, out-of-scope, and live-rollout risk. `5fe0eea` fixes a service-replacement bug an adversarial self-review caught post-push (see REVIEW.md errata). `cdk synth` passes without AWS credentials. |
+| 2 — Fixes | commits `655147d` + `2af650b` | Top 3 findings only: deploy-outage settings, credentials/DB exposure, data survivability. ~20-line diff to `lib/`; message covers scope, out-of-scope, and live-rollout risk. `2af650b` fixes a service-replacement bug an adversarial self-review caught post-push (see REVIEW.md errata). `cdk synth` passes without AWS credentials. |
 | 3 — AI notes | [`AI-NOTES.md`](AI-NOTES.md) | How AI was used, plus concrete disagreements — sourced from a log kept during the work, not reconstructed after. |
 
 ## Suggested reading order
 
 1. `REVIEW.md` — TL;DR first; the ranking rationale is the point. Errata section included.
-2. `git show 6f1771d` — the fix commit and its message — then `5fe0eea`, the self-review fix.
+2. `git show 655147d` — the fix commit and its message — then `2af650b`, the self-review fix.
 3. `PARA/Tasks/05-FixCommitAdversarialReview/01-adversarial-review.md` — the adversarial
    review of the fix: per-vector verdicts, one real bug found, one of its own verdicts
    reversed and the reversal recorded.
@@ -22,16 +22,17 @@ One page on where everything is. Total time: within the 4-hour box.
 ## Commit trail
 
 ```
-1a65f9f  bootstrap: task/doc structure (PARA/, CLAUDE.md) — process, not assignment content
-a378aad  REVIEW.md — ranked findings + week-one plan
-a782e19  REVIEW.md — optional kicker appended
-6f1771d  fix commit — the Part 2 deliverable
-f5b2c5b  AI-NOTES.md
-f7cd462  RESULTS.md (this guide)
-5fe0eea  fix-of-the-fix: circuit breaker would have replaced the live service — caught by self-review
-7856f8f  week-one plan ticketed as project 02 (issues #7–#14), planned-not-implemented
-7d4d8b2  self-review closeout (be79d1b corrects one of its verdicts — deliberately kept visible)
-(HEAD)   errata in REVIEW.md + AI-notes/guide refresh — this commit
+e7ba0f8  bootstrap: task/doc structure (PARA/, CLAUDE.md) — process, not assignment content
+3a0204b  REVIEW.md — ranked findings + week-one plan
+2421410  REVIEW.md — optional kicker appended
+655147d  fix commit — the Part 2 deliverable
+a54a706  AI-NOTES.md
+8a27983  RESULTS.md (this guide)
+2af650b  fix-of-the-fix: circuit breaker would have replaced the live service — caught by self-review
+42f1992  week-one plan ticketed as project 02 (issues #7–#14), planned-not-implemented
+c70b6af  self-review closeout (4223610 corrects one of its verdicts — deliberately kept visible)
+8cea2bf  errata in REVIEW.md + AI-notes working model + project board link
+(HEAD)   final polish — this commit
 ```
 
 ## About `PARA/` and the GitHub issues

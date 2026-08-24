@@ -49,11 +49,11 @@ arguing only from the synthesized CloudFormation templates. It found something m
 and the fixing session had both missed — adding the deployment circuit breaker made
 CloudFormation **replace the running ECS service**, the exact outage the fix existed to
 prevent, invisible in the CDK source and visible only in the template diff (fixed in
-`5fe0eea`). The same session then reversed one of its own verdicts: it had passed the
+`2af650b`). The same session then reversed one of its own verdicts: it had passed the
 commit's claims on first reading, and a second, adversarial pass caught the commit message
 contradicting REVIEW.md's "never rotate and rewire in the same deploy" rule — recorded as
-a downgrade with the original wrong verdict left visible (`PARA/Tasks/
-05-FixCommitAdversarialReview/01-adversarial-review.md`, errata in `REVIEW.md`). That is
+a downgrade with the original wrong verdict left visible (`PARA/Tasks/05-FixCommitAdversarialReview/01-adversarial-review.md`, errata in
+`REVIEW.md`). That is
 the honest summary of AI in this exercise: the first pass is a draft — including the first
 pass at reviewing the first pass — and the discipline lives in the system around it:
 evidence over reading, logs written at the moment of decision, reversals recorded instead

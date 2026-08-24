@@ -1,6 +1,6 @@
-# Adversarial review — fix commit `6f1771d`
+# Adversarial review — fix commit `655147d`
 
-**Method.** `git worktree add … a782e19` (the commit's parent), `cdk synth` both sides with no
+**Method.** `git worktree add … 2421410` (the commit's parent), `cdk synth` both sides with no
 AWS credentials, then a resource-level diff of `cdk.out/*.template.json`. Every verdict below
 cites the synthesized template, not the TypeScript. Judged **only** against the commit
 message's own claims and `REVIEW.md` § "Top 3 findings to fix now".
@@ -9,7 +9,7 @@ message's own claims and `REVIEW.md` § "Top 3 findings to fix now".
 commit; one in the commit's own claims (V7), documented here.
 
 - **V1** — a side effect of *how* CDK renders the circuit breaker silently converts the next
-  production deploy from a rolling update into a **service replacement**. Fixed in `5fe0eea`.
+  production deploy from a rolling update into a **service replacement**. Fixed in `2af650b`.
 - **V7** — the commit contradicts an explicit, absolute instruction in REVIEW.md
   (*"never rotate and rewire in the same deploy"*) without disclosing it, and one of its
   verification bullets is factually false. No code change: REVIEW.md's prescribed alternative is
@@ -22,7 +22,7 @@ commit; one in the commit's own claims (V7), documented here.
 > reversal rather than quietly editing it: a review that ships an unverified PASS is the exact
 > failure this task exists to catch, and that applies to the reviewer too.
 
-## Complete resource delta (`a782e19` → `6f1771d`)
+## Complete resource delta (`2421410` → `655147d`)
 
 | Stack | Resource | Change |
 |---|---|---|
@@ -56,8 +56,8 @@ that *is* a replacement-triggering property and this verdict would have been cat
 **ECS service: FAIL.** The service gains a property it did not previously have:
 
 ```
-PRE  (a782e19): DeploymentController  absent
-POST (6f1771d): DeploymentController  {"Type": "ECS"}
+PRE  (2421410): DeploymentController  absent
+POST (655147d): DeploymentController  {"Type": "ECS"}
 ```
 
 `DeploymentController` on `AWS::ECS::Service` is documented **"Update requires: Replacement"**.
@@ -113,10 +113,10 @@ survive untouched — REVIEW.md's finding-2 fix is fully preserved.
 wrong — that `DeploymentController` is "absent from both templates (grep count: 0)", so no
 replacement could occur. That pass had synthesized the working tree *after* the fix above was
 already applied, so its "post-fix" template was the corrected one. Settled by synthesizing a clean
-detached checkout of `6f1771d` itself, whose `cdk.json` is the original one-line file:
+detached checkout of `655147d` itself, whose `cdk.json` is the original one-line file:
 
 ```
-$ cat cdk.json      # at 6f1771d
+$ cat cdk.json      # at 655147d
 { "app": "npx ts-node --prefer-ts-exts bin/pricefeed.ts" }
 $ npx cdk synth && python3 -c "…ServiceD69D759B…"
 DeploymentController : {"Type": "ECS"}
@@ -147,7 +147,7 @@ task definition.
 Two precision notes on "killing the leaked value". It kills the credential's *validity*, not the
 string, and there are two places the string survives:
 
-- **Git history** — `Pr1cefeed-Pr0d-2024!` remains at `a782e19` forever. Not a defect: REVIEW.md
+- **Git history** — `Pr1cefeed-Pr0d-2024!` remains at `2421410` forever. Not a defect: REVIEW.md
   argues rotation rather than history-rewriting is what defuses the leak, so commit and review agree.
 - **Deployed ECS task-definition revisions** — this one is not owned anywhere. Task definition
   revisions are immutable and retained; the pre-commit revision carries
@@ -229,7 +229,7 @@ record. The two secret-related failure modes split:
 
 So the commit's instruction to "watch ECS service events and /health" is blind to the one failure
 mode the credential change introduces: for this app a 200 means Node is listening, nothing more.
-That is a limitation of the inherited app, not something `6f1771d` broke — but it means the safety
+That is a limitation of the inherited app, not something `655147d` broke — but it means the safety
 net the commit leans on does not cover the risk the commit takes.
 
 The `force-new-deployment` step in `deploy.yml` remains as ugly as REVIEW.md finding 5 says, and it
@@ -326,7 +326,7 @@ Two defects:
 
 - **V1, in the infrastructure.** An invisible, CDK-injected `DeploymentController` would have
   replaced the live ECS service on the next merge — unattended, since `deploy.yml` deploys on every
-  push. Fixed in `5fe0eea` with a three-line `cdk.json` change and no alteration to the reviewed
+  push. Fixed in `2af650b` with a three-line `cdk.json` change and no alteration to the reviewed
   logic.
 - **V7, in the claims.** The commit does the one thing REVIEW.md forbids in absolute terms
   ("never rotate and rewire in the same deploy") without disclosing it; asserts a secrets grant is
@@ -341,5 +341,5 @@ one code defect, and everything else surfaced during the review went to `00.reje
 **If I had more time,** the highest-value next check is the one thing this review could not do
 without an AWS account: run `cdk diff` against the real deployed stacks. Every verdict here is
 derived from synthesized templates versus the parent commit, which is the correct proxy when the
-deployed state matches `a782e19` — but nothing in this repo proves it does, and drift would change
+deployed state matches `2421410` — but nothing in this repo proves it does, and drift would change
 V1's blast radius in particular.
