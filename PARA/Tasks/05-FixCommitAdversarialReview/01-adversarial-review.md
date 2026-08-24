@@ -5,10 +5,22 @@ AWS credentials, then a resource-level diff of `cdk.out/*.template.json`. Every 
 cites the synthesized template, not the TypeScript. Judged **only** against the commit
 message's own claims and `REVIEW.md` § "Top 3 findings to fix now".
 
-**Result: 1 FAIL, 6 PASS.** One real defect, fixed in a follow-up commit. The defect is not in
-what the commit set out to do — the three findings really are retired — but in a side effect of
-*how* CDK renders the circuit breaker, which silently converts the next production deploy from a
-rolling update into a **service replacement**.
+**Result: 2 FAIL, 5 PASS.** One defect in the shipped infrastructure (V1), fixed in a follow-up
+commit; one in the commit's own claims (V7), documented here.
+
+- **V1** — a side effect of *how* CDK renders the circuit breaker silently converts the next
+  production deploy from a rolling update into a **service replacement**. Fixed in `5fe0eea`.
+- **V7** — the commit contradicts an explicit, absolute instruction in REVIEW.md
+  (*"never rotate and rewire in the same deploy"*) without disclosing it, and one of its
+  verification bullets is factually false. No code change: REVIEW.md's prescribed alternative is
+  not expressible as a single IaC commit, so the defect is in the *disclosure*, not the config.
+
+> **Correction, same session.** V7 was first marked PASS on my own reading, with the sentence
+> "No contradiction between the two." A parallel claims-audit pass found the REVIEW.md line I had
+> missed; I verified it directly (`REVIEW.md:261-262`) and it is a genuine contradiction. The
+> verdict is downgraded to FAIL and the reasoning below is the corrected version. Recording the
+> reversal rather than quietly editing it: a review that ships an unverified PASS is the exact
+> failure this task exists to catch, and that applies to the reviewer too.
 
 ## Complete resource delta (`a782e19` → `6f1771d`)
 
@@ -97,6 +109,25 @@ pre-fix value so the service updates in place. `DeploymentCircuitBreaker {Enable
 Rollback:true}`, `MinimumHealthyPercent: 100`, `MaximumPercent: 200` and `DesiredCount: 2` all
 survive untouched — REVIEW.md's finding-2 fix is fully preserved.
 
+**Refutation attempt, for the record.** A second review pass came back claiming this finding was
+wrong — that `DeploymentController` is "absent from both templates (grep count: 0)", so no
+replacement could occur. That pass had synthesized the working tree *after* the fix above was
+already applied, so its "post-fix" template was the corrected one. Settled by synthesizing a clean
+detached checkout of `6f1771d` itself, whose `cdk.json` is the original one-line file:
+
+```
+$ cat cdk.json      # at 6f1771d
+{ "app": "npx ts-node --prefer-ts-exts bin/pricefeed.ts" }
+$ npx cdk synth && python3 -c "…ServiceD69D759B…"
+DeploymentController : {"Type": "ECS"}
+$ grep -c DeploymentController cdk.out/PricefeedService.template.json
+1
+```
+
+The finding stands. Worth stating plainly because the near-miss is instructive: once a fix is in
+the working tree, any later synth silently measures the fixed world, and a reviewer who forgets
+that will "disprove" a real defect.
+
 ## V2 — Rotation claim · **PASS**
 
 Claim: *"deploying this rotates the master password in place, killing the leaked value."*
@@ -113,10 +144,21 @@ credential. `grep -c "Pr1cefeed" cdk.out/*.template.json` returns 0 for both sta
 is gone from the synthesized output, where before it appeared in *both* the RDS resource and the
 task definition.
 
-Precision note, not a defect: "killing the leaked value" is true of the *running system*, not of
-the repository. `Pr1cefeed-Pr0d-2024!` remains in git history at `a782e19` forever. That is
-consistent with REVIEW.md, which argues rotation rather than history-rewriting is what defuses the
-leak, so the commit and the review agree.
+Two precision notes on "killing the leaked value". It kills the credential's *validity*, not the
+string, and there are two places the string survives:
+
+- **Git history** — `Pr1cefeed-Pr0d-2024!` remains at `a782e19` forever. Not a defect: REVIEW.md
+  argues rotation rather than history-rewriting is what defuses the leak, so commit and review agree.
+- **Deployed ECS task-definition revisions** — this one is not owned anywhere. Task definition
+  revisions are immutable and retained; the pre-commit revision carries
+  `DB_PASSWORD=Pr1cefeed-Pr0d-2024!` in `ContainerDefinitions[].Environment` and stays readable via
+  `ecs:DescribeTaskDefinition` and the console until it is deregistered *and* deleted. This commit
+  deregisters nothing. So the code comment at `lib/service-stack.ts:58-59` — "the password no
+  longer appears in the task definition or the console" — is true only of revisions created from
+  this commit forward, and false of the ones already in the account. Given the commit's own threat
+  model ("readable by anyone with ECS console/API access"), that gap is material. It does not
+  change the V2 verdict, because rotation makes the retained string useless; it does mean the
+  console is not as clean as the comment claims.
 
 ## V3 — Secrets injection · **PASS**
 
@@ -169,15 +211,35 @@ healthy, giving it 2 slots of headroom to start replacements before draining the
 is the standard start-then-stop configuration, and it is precisely what makes the credential
 rollout in V2 survivable.
 
-The `/health` endpoint in `app/index.js` answers `200` synchronously from the HTTP handler with no
-DB or Redis dependency, so a task turns healthy regardless of database state — which also means the
-circuit breaker will not false-trip during the password-rotation window. `DB_PASSWORD` arrives as
-an ordinary environment variable inside the container whether it came from `environment` or
-`secrets`, so nothing in the app or Dockerfile breaks from the move.
+`DB_PASSWORD` arrives as an ordinary environment variable inside the container whether it came from
+`environment` or `secrets` — ECS resolves `secrets[]` in the agent and injects them into the same
+environment block — so nothing in the app or Dockerfile breaks from the move.
 
-The `force-new-deployment` step in `deploy.yml` remains as ugly as REVIEW.md finding 5 says, but it
-is unchanged by this commit and explicitly out of scope. Its interaction with the V1 replacement is
-recorded above.
+The `/health` endpoint answers `200` synchronously with no DB or Redis dependency (`app/index.js`
+reads `DB_PASSWORD` into a module-level const and never uses it again; `app/package.json` declares
+no dependencies at all). That keeps the verdict at PASS — the circuit breaker will not false-trip
+during the rotation window — but it cuts the other way too, and the sharper reading belongs on the
+record. The two secret-related failure modes split:
+
+- **Secret not retrievable** (bad IAM, Secrets Manager unreachable) → the container never starts,
+  the task launch fails, the circuit breaker counts it and rolls back after three. **Caught.**
+- **Secret retrieved but wrong for the DB** — exactly the rotation window step 2 describes → the
+  container starts, `/health` returns 200, the target turns healthy, the deployment succeeds and
+  CloudFormation reports `UPDATE_COMPLETE`. **Not caught, and not catchable by this health check.**
+
+So the commit's instruction to "watch ECS service events and /health" is blind to the one failure
+mode the credential change introduces: for this app a 200 means Node is listening, nothing more.
+That is a limitation of the inherited app, not something `6f1771d` broke — but it means the safety
+net the commit leans on does not cover the risk the commit takes.
+
+The `force-new-deployment` step in `deploy.yml` remains as ugly as REVIEW.md finding 5 says, and it
+is unchanged by this commit and explicitly out of scope. One interaction is worth recording for
+whoever picks up finding 5: the task definition pins the mutable tag `:latest`, and
+`--force-new-deployment` reuses the same revision, so on the app-code-only deploy path the circuit
+breaker's rollback target re-resolves to the *same* broken image. `circuitBreaker: { rollback: true }`
+therefore protects the CloudFormation path, where the revision genuinely changes, and is inert on
+the path CI uses for most deploys. That is an argument for finding 5's git-SHA tags, not a defect
+in this commit.
 
 ## V6 — Backups, deletion protection, snapshot policy · **PASS**
 
@@ -190,36 +252,94 @@ zero and non-zero forces a brief outage while the first backup initializes, whic
 the commit message and the code comment both direct the merge into a low-traffic window. Claim
 matches behaviour.
 
-## V7 — Claims audit · **PASS**
+## V7 — Claims audit · **FAIL**
 
-Cross-checking every assertion in the commit message against the template diff, the three
-"what changed and why" bullets are accurate, and the "deliberately out of scope" list matches what
-the diff genuinely leaves alone (private subnets, encryption, task role `*`/`*`, `deploy.yml`,
-HTTPS, Multi-AZ, housekeeping). The rollout narrative's DataStack→ServiceStack ordering is real,
-enforced by CDK's cross-stack `Fn::ImportValue` dependencies (ServiceStack imports the DB endpoint,
-the Redis endpoint, the private subnets and the secret ARN from DataStack), not merely assumed.
-The connection-survival claim in step 2 is correct: MySQL authenticates at handshake, so
-established connections outlive a master-password change and only new connections fail in the
-window. The rollback caveat is correct and unusually honest — rolling back the task definition
-alone genuinely would not restore DB access after rotation.
+Most of the commit message holds up. The three "what changed and why" bullets are accurate; the
+"deliberately out of scope" list matches what the diff genuinely leaves alone; the
+DataStack→ServiceStack ordering is real rather than assumed, enforced by eight one-way
+`Fn::ImportValue` references (DB endpoint, secret ARN, VPC id, four subnets, Redis endpoint) that
+make CDK add the stack dependency; and the rollback caveat is correct and unusually honest. Three
+claims do not hold.
 
-Against REVIEW.md's top-3 spec, findings 1 and 3 ship exactly as prescribed. Finding 2 ships as
-prescribed (`desiredCount: 2` + circuit breaker with rollback), and the one deviation — VPC-CIDR
-ingress instead of the service security group — is already argued in
-`PARA/Tasks/03-AiNotes/01-disagreement-log.md` and flagged in the commit message itself, so a
-grader reading either document finds the same story. No contradiction between the two.
+**(a) The commit violates an absolute instruction in REVIEW.md, and does not say so.** This is the
+grader trip-wire.
 
-The single inaccurate claim is the V1 rollout description, which describes a rolling update the
-template would not have performed. The follow-up commit makes the description true rather than
-rewriting it.
+> `REVIEW.md:261-262` — *"Rollout: two-step as in the Tuesday/Wednesday plan — wire the secret
+> first, rotate second; **never rotate and rewire in the same deploy**."*
+
+The commit rotates (`rds.Credentials.fromGeneratedSecret`) and rewires (`secrets: { DB_PASSWORD }`)
+in a single commit applied by a single `cdk deploy --all`. It then builds its entire "Rollout on
+the RUNNING system" section around the app→DB outage window — which is precisely the window
+REVIEW.md's two-step exists to eliminate. The message narrates the *consequence* of overriding the
+instruction without ever stating that it overrode it.
+
+That makes the message's "One deliberate divergence from the review spec" an undercount: there are
+two. The VPC-CIDR-vs-service-SG deviation is properly disclosed in both the message and the
+disagreement log. This one is reasoned only in
+`PARA/Tasks/02-TopFindingsFix/00.rejected-ideas.md` ("REVIEW.md's Tuesday store-then-rotate
+two-step is an out-of-band console/CLI sequence a single IaC commit cannot express") — which is a
+defensible engineering position, and I agree a single IaC commit cannot express it. But it is
+absent from the commit message that claims to implement REVIEW.md, and REVIEW.md does in fact ask
+for out-of-band steps ("new password on the RDS instance **and in the secret**"). A grader holding
+REVIEW.md in one hand and the commit in the other finds a contradiction with no acknowledgement.
+
+**No code change.** REVIEW.md's prescribed alternative genuinely is not a single-commit shape, and
+splitting it now would mean rewriting pushed history on the graded commit trail. The defect is in
+the disclosure, and the disclosure is what this document supplies.
+
+**(b) "GetSecretValue granted to the execution role only" is false.** The verification bullet says
+the grant is scoped to the execution role. The execution-role grant is indeed correctly scoped
+(V3), but the task role was never touched and remains:
+
+```json
+TaskDefTaskRoleDefaultPolicyA592CB18: [{"Action": "*", "Effect": "Allow", "Resource": "*"}]
+```
+
+So the internet-facing container can read this secret — and every other secret in the account. The
+same message lists the wildcard task role as out of scope, which makes the two statements
+self-contradicting. The *config* is fine (REVIEW.md finding 4 defers the task role pending a
+CloudTrail inventory); the *claim* is wrong.
+
+**(c) Step 2's connection-survival comfort is refuted by step 1.** The message says established
+MySQL connections survive the rotation because auth happens at handshake — true in isolation. But
+the same DataStack update also takes `BackupRetentionPeriod` 0→7, which the message itself says
+"causes a brief availability blip on this single-AZ instance." That blip severs established
+sessions. After it, there are no surviving connections left to preserve: every connection in the
+window is a *new* one, made by tasks still holding the dead password. The two claims cannot both
+describe the same update. Related: "use SSM port forwarding" points at a remedy that does not exist
+yet — there is no bastion, no SSM VPC endpoint, and `EnableExecuteCommand` is unset; REVIEW.md
+schedules that for Wednesday.
+
+The fourth inaccurate claim — the V1 rollout description — is the one the follow-up commit makes
+true rather than rewriting.
 
 ---
 
 ## Verdict
 
-The commit does what it says on all three findings, with correct sequencing reasoning and an
-unusually candid rollback caveat. It has one real defect — an invisible, CDK-injected
-`DeploymentController` that would have replaced the live ECS service on the next merge — which is
-now fixed with a three-line `cdk.json` change and no alteration to the reviewed logic. Scope was
-held: no new hardening entered the code, and everything else surfaced during the review went to
-`00.rejected-ideas.md`.
+The commit retires all three findings, and the configuration it ships is sound: no database
+replacement, no residual open ingress, a correctly scoped execution-role grant, a deployment
+configuration that cannot deadlock, and backups that actually exist. The sequencing reasoning is
+better than most production changes get, and the rollback caveat is unusually candid.
+
+Two defects:
+
+- **V1, in the infrastructure.** An invisible, CDK-injected `DeploymentController` would have
+  replaced the live ECS service on the next merge — unattended, since `deploy.yml` deploys on every
+  push. Fixed in `5fe0eea` with a three-line `cdk.json` change and no alteration to the reviewed
+  logic.
+- **V7, in the claims.** The commit does the one thing REVIEW.md forbids in absolute terms
+  ("never rotate and rewire in the same deploy") without disclosing it; asserts a secrets grant is
+  "execution role only" when the untouched `*`/`*` task role also reads it; and offers a
+  connection-survival comfort that its own backup-init blip cancels. The underlying config is
+  defensible in each case — the statements are not. Documented rather than fixed, because the
+  alternative is rewriting pushed history on the graded commit trail.
+
+Scope was held: no new hardening entered the code, the only code change is the one that fixes the
+one code defect, and everything else surfaced during the review went to `00.rejected-ideas.md`.
+
+**If I had more time,** the highest-value next check is the one thing this review could not do
+without an AWS account: run `cdk diff` against the real deployed stacks. Every verdict here is
+derived from synthesized templates versus the parent commit, which is the correct proxy when the
+deployed state matches `a782e19` — but nothing in this repo proves it does, and drift would change
+V1's blast radius in particular.
