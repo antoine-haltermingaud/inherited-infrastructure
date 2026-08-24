@@ -7,7 +7,7 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
-import { DB_USER, DB_PASSWORD } from './data-stack';
+import { DB_USER } from './data-stack';
 
 interface ServiceStackProps extends cdk.StackProps {
   vpc: ec2.Vpc;
@@ -53,17 +53,27 @@ export class ServiceStack extends cdk.Stack {
         PORT: '3000',
         DB_HOST: props.database.dbInstanceEndpointAddress,
         DB_USER,
-        DB_PASSWORD,
         REDIS_HOST: props.redisHost,
+      },
+      // Injected by ECS at start-up straight from Secrets Manager — the
+      // password no longer appears in the task definition or the console.
+      secrets: {
+        DB_PASSWORD: ecs.Secret.fromSecretsManager(
+          props.database.secret!,
+          'password'
+        ),
       },
     });
 
     const service = new ecs.FargateService(this, 'Service', {
       cluster,
       taskDefinition,
-      desiredCount: 1,
-      minHealthyPercent: 0,
-      maxHealthyPercent: 100,
+      desiredCount: 2,
+      // Keep the old tasks serving until replacements pass health checks.
+      minHealthyPercent: 100,
+      maxHealthyPercent: 200,
+      // Roll back automatically instead of hanging for hours on a bad image.
+      circuitBreaker: { rollback: true },
     });
 
     const alb = new elbv2.ApplicationLoadBalancer(this, 'Alb', {

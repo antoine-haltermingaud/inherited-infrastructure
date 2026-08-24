@@ -6,7 +6,6 @@ import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 
 // Pricefeed needs MySQL for persistent data and Redis for derived/cached data.
 export const DB_USER = 'admin';
-export const DB_PASSWORD = 'Pr1cefeed-Pr0d-2024!';
 
 export class DataStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
@@ -26,11 +25,12 @@ export class DataStack extends cdk.Stack {
       vpc: this.vpc,
       description: 'pricefeed mysql',
     });
-    // Allow the team to connect with MySQL Workbench from home / on the road.
+    // MySQL is reachable from inside the VPC only. Team access from laptops
+    // needs a tunnel from here on (SSM/VPN) — tracked in REVIEW.md.
     dbSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
+      ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
       ec2.Port.tcp(3306),
-      'mysql access'
+      'mysql from vpc'
     );
 
     this.database = new rds.DatabaseInstance(this, 'Database', {
@@ -45,16 +45,17 @@ export class DataStack extends cdk.Stack {
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       publiclyAccessible: true,
       securityGroups: [dbSecurityGroup],
-      credentials: rds.Credentials.fromPassword(
-        DB_USER,
-        cdk.SecretValue.unsafePlainText(DB_PASSWORD)
-      ),
+      // Generated in Secrets Manager; deploying this rotates the master
+      // password in place. Rollout order is in the commit message.
+      credentials: rds.Credentials.fromGeneratedSecret(DB_USER),
       multiAz: false,
       allocatedStorage: 100,
       storageEncrypted: false,
-      backupRetention: cdk.Duration.days(0),
-      deletionProtection: false,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      // Going 0 → 7 days initializes backups: brief outage on this single-AZ
+      // instance. Deploy in a low-traffic window (REVIEW.md, Monday plan).
+      backupRetention: cdk.Duration.days(7),
+      deletionProtection: true,
+      removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
     });
 
     // Redis: derived data only, so a single small cache node is fine.
