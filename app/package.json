@@ -1,0 +1,9 @@
+{
+  "name": "pricefeed",
+  "version": "1.4.2",
+  "private": true,
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test.js"
+  }
+}
