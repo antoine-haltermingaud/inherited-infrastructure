@@ -33,3 +33,8 @@ todos, rejected ideas) mirrored to a closed GitHub issue (#1–#4; #5 is a docum
 duplicate from two sessions racing). Kept in the repo as evidence of process — including
 `PARA/Tasks/03-AiNotes/01-disagreement-log.md`, the raw material behind `AI-NOTES.md`.
 Safe to ignore entirely when grading.
+
+One optional extra: `REVIEW.md`'s week-one plan is also *ticketed* — project
+[`02-PricefeedHardening`](PARA/Projects/02-PricefeedHardening/00.tasks.md) sequences the
+remaining findings as 8 planned tasks (issues #7–#14), **deliberately not implemented**
+per Part 2's top-2–3 scope.
