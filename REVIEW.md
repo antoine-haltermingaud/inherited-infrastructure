@@ -276,6 +276,26 @@ data (deploy frequency, task role usage, actual traffic curves), price the Multi
 TLS decisions concretely, and pair with the team on the deploy-pipeline rework rather
 than prescribing it.
 
+## Errata — from post-commit self-review
+
+An adversarial review of the fix commit (resource-by-resource diff of the synthesized
+templates on both sides of `6f1771d`; full verdicts in
+`PARA/Tasks/05-FixCommitAdversarialReview/01-adversarial-review.md`) produced two
+corrections after the commit was pushed:
+
+1. **The circuit breaker would have replaced the running service.** Adding
+   `circuitBreaker` makes the CDK emit an explicit deployment controller, which
+   CloudFormation treats as ECS service *replacement* — the exact outage finding 2 exists
+   to prevent, invisible in the CDK source and visible only in the template diff. Fixed in
+   `5fe0eea`.
+2. **The commit message overstates its own rollout safety.** Applied as one deploy, the
+   commit rotates the DB password and rewires the secret injection simultaneously — the
+   sequence the Tuesday plan forbids. The end-state configuration is right; applying it to
+   the live system means the two-step Tuesday sequence (wire first, rotate second), which a
+   single IaC commit cannot express and the message should have said.
+
+Left as an errata rather than rewriting pushed history: the trail is the point.
+
 ## Optional kicker — ECS and Kubernetes: consolidate?
 
 Consolidate — running two orchestrators is the most expensive redundancy a team of this

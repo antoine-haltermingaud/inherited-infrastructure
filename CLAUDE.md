@@ -1,6 +1,7 @@
 ---
 # Important: Any change to this file must increase version number
-version: 2
+version: 3
+# v3: GitHub Project board added as the visual layer over the issues.
 # v2: GitHub issue tracking added (one issue per task, para.yml `issue:` field).
 # Adapted from the Simple Enough mono-repo PARA rules (v7).
 # Changes: <area> layer removed; Tana / mono-repo / Contango specifics removed.
@@ -136,6 +137,10 @@ Progress is tracked in GitHub issues; the repo stays the source of truth. The is
 - A task without an issue is `issue: tbd` — the first session that works the task creates the
   issue (step 3 of the working protocol) and replaces `tbd` with the number.
 - Projects do not get issues; `00.tasks.md` already tracks them. Only tasks map to issues.
+- **Board**: all task issues live on GitHub Project
+  <https://github.com/users/antoine-haltermingaud/projects/3> — a view, not a home. Add the
+  issue to the board when creating it; Status column mirrors `para.yml` `status:` (same
+  zero-drift rule). The duplicate issue #5 is deliberately off the board.
 
 ## Lifecycle
 

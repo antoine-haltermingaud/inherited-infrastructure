@@ -33,3 +33,28 @@ are not. AI also floated storing the leaked password in Secrets Manager *unchang
 avoid rotation risk during rollout — pointless, since the value sits in pushed git history
 and is therefore already compromised. The full log, entry by entry, is in
 `PARA/Tasks/03-AiNotes/01-disagreement-log.md`.
+
+A note on the working model, since it is how I work generally and not something invented
+for this exercise: the only tool used was Claude (Claude Code), and the repo itself is the
+coordination layer. `CLAUDE.md` defines the protocol — every unit of work is a folder under
+`PARA/Tasks/` with requirements, context, and rejected ideas, mirrored to a GitHub issue —
+and sessions hand off to each other through written briefs, not shared chat history. That
+structure is what made parallel sessions safe: when two sessions raced to create the same
+issue, or one started before its input document existed, the repo state let them detect and
+resolve it themselves, and the seams are visible in the issue log rather than hidden.
+
+The strongest evidence for that model came after the deliverables were done, still inside
+the time box: a fresh session was told to assume the fix commit was wrong and prove it,
+arguing only from the synthesized CloudFormation templates. It found something my review
+and the fixing session had both missed — adding the deployment circuit breaker made
+CloudFormation **replace the running ECS service**, the exact outage the fix existed to
+prevent, invisible in the CDK source and visible only in the template diff (fixed in
+`5fe0eea`). The same session then reversed one of its own verdicts: it had passed the
+commit's claims on first reading, and a second, adversarial pass caught the commit message
+contradicting REVIEW.md's "never rotate and rewire in the same deploy" rule — recorded as
+a downgrade with the original wrong verdict left visible (`PARA/Tasks/
+05-FixCommitAdversarialReview/01-adversarial-review.md`, errata in `REVIEW.md`). That is
+the honest summary of AI in this exercise: the first pass is a draft — including the first
+pass at reviewing the first pass — and the discipline lives in the system around it:
+evidence over reading, logs written at the moment of decision, reversals recorded instead
+of edited away.
