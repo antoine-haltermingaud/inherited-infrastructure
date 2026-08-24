@@ -2,3 +2,14 @@
 
 Append one entry per disagreement, as it happens, from ANY chat (tasks 01/02/04 included).
 Format: `- [task] AI suggested X → rejected/corrected because Y.`
+
+- [02] AI first proposed the DB ingress fix as an SG-to-SG rule added in ServiceStack (`allowFrom(service)`) → corrected: `cdk deploy --all` updates DataStack before ServiceStack, so the `0.0.0.0/0` rule would be revoked before the service-SG allow exists — an app→DB outage window on a live system. Replaced with a VPC-CIDR rule inside DataStack: single-stack, atomic, mirrors the existing Redis SG.
+- [02] AI floated storing the already-committed password in Secrets Manager unchanged, to avoid any rotation risk during rollout → rejected: the password sits in pushed git history, i.e. it is compromised; storing it secures nothing. Went with a generated secret + in-place master-password rotation, and documented the rollout window instead of avoiding it.
+- [02] AI wanted to bundle "free" hardening one-liners into the commit (backupRetention, deletionProtection, task-role scoping) → rejected: scope is graded; backups 0→N actually takes an RDS outage (not free); role scoping needs a usage inventory first. All deferred to REVIEW.md.
+
+- [04] AI weighed "consolidate onto EKS (industry standard, avoids ECS lock-in)" as the lead position → discarded as the default because the dominant constraint (handful of engineers, no ops team) makes the Kubernetes platform tax the deciding cost; EKS kept only as a conditional outcome of environment discovery.
+- [01-InfraReview] AI's first-draft ranking put outage-per-deploy #1, above the exposed DB → corrected: outages are recoverable and already survived daily; a poisoned pricefeed or a destroyed, backup-less dataset is irreversible. Exposed DB + git-committed credentials ranked #1.
+- [01-InfraReview] AI suggested purging the leaked DB password from git history (git-filter-repo/BFG) → rejected: rotation makes the historical value worthless; rewriting shared main history breaks every clone for zero post-rotation security gain.
+- [01-InfraReview] AI suggested enabling RDS Multi-AZ in week one → rejected: doubles DB cost against a low-likelihood failure while backups don't even exist yet; backups first, Multi-AZ as a priced decision later (REVIEW.md finding 7).
+- [01-InfraReview] AI suggested putting the CI test/synth gate into the top-3 fix commit → rejected: it retires none of the three biggest standing risks; scheduled for Thursday of week one instead.
+- [01-InfraReview] AI suggested moving RDS to private subnets together with the security-group lockdown → rejected: re-homing a live single-AZ DB is a downtime migration; the SG-only change removes the exposure instantly with zero downtime, subnet move gets its own window.
